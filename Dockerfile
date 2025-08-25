@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for building OVN RPMs following official process
-ARG DISTRO=rockylinux
+ARG DISTRO=rockylinux/rockylinux
 ARG VERSION=9
 
 FROM ${DISTRO}:${VERSION} as builder
@@ -32,6 +32,22 @@ RUN dnf install -y \
     dnf-plugins-core \
     wget \
     git \
+    python3-sphinx \
+    checkpolicy \
+    desktop-file-utils \
+    groff \
+    libbpf-devel \
+    libcap-ng-devel \
+    libxdp-devel \
+    numactl-devel \
+    openssl-devel \
+    procps-ng \
+    python3-devel \
+    selinux-policy-devel \
+    systemd-devel \
+    systemtap-sdt-devel \
+    unbound \
+    unbound-devel \
     && dnf clean all
 
 # Set working directory

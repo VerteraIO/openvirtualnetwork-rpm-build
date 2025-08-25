@@ -54,7 +54,7 @@ jobs:
           echo "Building OVN ${VERSION} for Enterprise Linux 9"
           
           docker build \
-            --build-arg DISTRO=rockylinux \
+            --build-arg DISTRO=rockylinux/rockylinux \
             --build-arg VERSION=9 \
             --build-arg OVN_VERSION=${VERSION} \
             --build-arg OVS_VERSION=3.6.0 \
@@ -118,7 +118,7 @@ jobs:
           echo "Building OVN ${VERSION} for Enterprise Linux 10"
           
           docker build \
-            --build-arg DISTRO=rockylinux \
+            --build-arg DISTRO=rockylinux/rockylinux \
             --build-arg VERSION=10 \
             --build-arg OVN_VERSION=${VERSION} \
             --build-arg OVS_VERSION=3.6.0 \
