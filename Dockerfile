@@ -78,7 +78,7 @@ RUN dnf builddep -y /tmp/ovn.spec && rm -f /tmp/ovn.spec
 RUN ./boot.sh
 
 # Configure and build OVN following official process
-RUN ./configure
+RUN ./configure --with-ovs-source=/root/ovs-${OVS_VERSION}
 
 # Build OVN RPMs using official method
 RUN make rpm-fedora
