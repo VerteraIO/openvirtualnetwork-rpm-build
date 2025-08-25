@@ -53,19 +53,14 @@ RUN dnf install -y \
 # Set working directory
 WORKDIR /root
 
-# First, build OVS (OVN dependency)
-RUN echo "Building OVS ${OVS_VERSION} as dependency..." && \
+# Generate OVS source tarball (OVN dependency)
+RUN echo "Generating OVS ${OVS_VERSION} source tarball..." && \
     wget https://github.com/openvswitch/ovs/archive/v${OVS_VERSION}.tar.gz -O ovs-${OVS_VERSION}.tar.gz && \
     tar -xzf ovs-${OVS_VERSION}.tar.gz && \
     cd ovs-${OVS_VERSION} && \
     ./boot.sh && \
     ./configure && \
-    make dist && \
-    make rpm-fedora
-
-# Install OVS RPMs as build dependency for OVN
-RUN dnf install -y /root/ovs-${OVS_VERSION}/rpm/rpmbuild/RPMS/x86_64/openvswitch-*.rpm || \
-    find /root -name "openvswitch-*.rpm" -exec dnf install -y {} \;
+    make dist
 
 # Download and extract OVN source
 RUN echo "Downloading OVN ${OVN_VERSION}..." && \
