@@ -1,0 +1,172 @@
+name: Build OVN RPMs
+
+on:
+  workflow_dispatch:
+    inputs:
+      ovn_version:
+        description: 'OVN version to build'
+        required: false
+        default: '24.09.0'
+        type: string
+  repository_dispatch:
+    types: [ovn-release]
+  release:
+    types: [published]
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  # Build for Enterprise Linux 9
+  build-el9:
+    runs-on: ubuntu-latest
+    outputs:
+      ovn_version: ${{ steps.set-version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set OVN version
+        id: set-version
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            VERSION="${{ github.event.client_payload.version }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.ovn_version }}"
+          elif [ "${{ github.event_name }}" = "release" ] || [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="24.09.0"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building OVN version: ${VERSION}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build OVN RPMs for EL9
+        run: |
+          VERSION="${{ steps.set-version.outputs.version }}"
+          echo "Building OVN ${VERSION} for Enterprise Linux 9"
+          
+          docker build \
+            --build-arg DISTRO=rockylinux \
+            --build-arg VERSION=9 \
+            --build-arg OVN_VERSION=${VERSION} \
+            --build-arg OVS_VERSION=3.6.0 \
+            -t ovn-rpm-builder:el9 \
+            -f Dockerfile .
+          
+          mkdir -p output
+          docker run --rm \
+            --name ovn-rpm-build-el9 \
+            -v $(pwd)/output:/output \
+            ovn-rpm-builder:el9
+
+      - name: Find RPM directory
+        id: find
+        run: |
+          # Find the directory containing RPMs
+          RPM_DIR=$(find output -name "*.rpm" -type f | head -1 | xargs dirname)
+          if [ -z "$RPM_DIR" ]; then
+            echo "No RPMs found!"
+            exit 1
+          fi
+          echo "rpm_dir=${RPM_DIR}" >> $GITHUB_OUTPUT
+          echo "Found RPMs in: ${RPM_DIR}"
+          ls -la ${RPM_DIR}/
+
+      - name: Upload EL9 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ovn-rpms-el9-${{ steps.set-version.outputs.version }}
+          path: ${{ steps.find.outputs.rpm_dir }}/*.rpm
+          if-no-files-found: error
+
+  # Build for Enterprise Linux 10
+  build-el10:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set OVN version
+        id: set-version
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            VERSION="${{ github.event.client_payload.version }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.ovn_version }}"
+          elif [ "${{ github.event_name }}" = "release" ] || [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="24.09.0"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building OVN version: ${VERSION}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build OVN RPMs for EL10
+        run: |
+          VERSION="${{ steps.set-version.outputs.version }}"
+          echo "Building OVN ${VERSION} for Enterprise Linux 10"
+          
+          docker build \
+            --build-arg DISTRO=rockylinux \
+            --build-arg VERSION=10 \
+            --build-arg OVN_VERSION=${VERSION} \
+            --build-arg OVS_VERSION=3.6.0 \
+            -t ovn-rpm-builder:el10 \
+            -f Dockerfile .
+          
+          mkdir -p output
+          docker run --rm \
+            --name ovn-rpm-build-el10 \
+            -v $(pwd)/output:/output \
+            ovn-rpm-builder:el10
+
+      - name: Find RPM directory
+        id: find
+        run: |
+          # Find the directory containing RPMs
+          RPM_DIR=$(find output -name "*.rpm" -type f | head -1 | xargs dirname)
+          if [ -z "$RPM_DIR" ]; then
+            echo "No RPMs found!"
+            exit 1
+          fi
+          echo "rpm_dir=${RPM_DIR}" >> $GITHUB_OUTPUT
+          echo "Found RPMs in: ${RPM_DIR}"
+          ls -la ${RPM_DIR}/
+
+      - name: Upload EL10 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ovn-rpms-el10-${{ steps.set-version.outputs.version }}
+          path: ${{ steps.find.outputs.rpm_dir }}/*.rpm
+          if-no-files-found: error
+
+  # Create GitHub release with RPM artifacts for tags
+  release:
+    needs: [build-el9, build-el10]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'repository_dispatch'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event_name == 'repository_dispatch' && format('v{0}', needs.build-el9.outputs.ovn_version) || github.ref_name }}
+          name: ${{ github.event_name == 'repository_dispatch' && format('OVN {0} RPMs', needs.build-el9.outputs.ovn_version) || '' }}
+          files: artifacts/**/*.rpm
+          generate_release_notes: true
+          draft: false
